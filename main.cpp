@@ -15,7 +15,7 @@ vec3 image[image_height][image_width];
 float depth[image_height][image_width];
 
 // #define TO_RASTER(v) vec3(image_width * (v.x + 1.0f) / 2, image_height * (v.y + 1.0f) / 2, 1.0f)
-#define TO_RASTER(v) vec4(image_width * (v.x + v.w) / 2 / v.w, image_height * (v.y + v.w) / 2 / v.w, v.z / v.w, v.w / v.w)
+#define TO_RASTER(v) vec4(image_width * (v.x + v.w) / 2, image_height * (v.y + v.w) / 2, v.z, v.w)
 
 
 bool left(vec3 p_k, vec3 p_i, vec3 p_j) {
@@ -56,9 +56,9 @@ void initialize_scene_objects(vector<mat4> &objects)
 	M3 = rotate(M3, radians(90.0f), vec3(0, 1, 0));
 	objects.push_back(M3);
 
-	// auto M4 = translate(identity, vec3(0, 0, 2));
-	// M4 = rotate(M4, radians(0.0f), vec3(0, 1, 0));
-	// objects.push_back(M4);
+	auto M4 = translate(identity, vec3(0, 0, 2));
+	M4 = rotate(M4, radians(0.0f), vec3(0, 1, 0));
+	objects.push_back(M4);
 }
 
 vec4 VS(const vec3& pos, const mat4& M, const mat4& V, const mat4& P)
@@ -73,14 +73,6 @@ void print(vec4 v)
 
 int main()
 {
-	// vec3 v0(-0.5, -0.5, 1.0);
-	// vec3 v1( 0.5, -0.5, 1.0);
-	// vec3 v2( 0.0,  0.5, 1.0);
-
-	// v0 = TO_RASTER(v0);
-	// v1 = TO_RASTER(v1);
-	// v2 = TO_RASTER(v2);
-
 	float near_plane = 0.1f;
 	float far_plane = 100.f;
 	vec3 eye(0, 3.75, 6.5);
@@ -120,30 +112,38 @@ int main()
 			vec3& v1 = vertices[indices[idx*3 + 1]];
 			vec3& v2 = vertices[indices[idx*3 + 2]];
 
+			// Invoke function for each vertex of the triangle to transform them from object-space to clip-space (-w, w)
 			vec4 v0clip = VS(v0, objects[n], view, proj);
 			vec4 v1clip = VS(v1, objects[n], view, proj);
 			vec4 v2clip = VS(v2, objects[n], view, proj);
 
+			// Apply viewport transformation
 			vec4 v0homogen = TO_RASTER(v0clip);
 			vec4 v1homogen = TO_RASTER(v1clip);
 			vec4 v2homogen = TO_RASTER(v2clip);
 
-			// print(v0homogen);
-			// print(v1homogen);
-			// print(v2homogen);
-			int test;
+			// Base vertex matrix
+			mat3 M =
+			{
+				{ v0homogen.x, v1homogen.x, v2homogen.x },
+				{ v0homogen.y, v1homogen.y, v2homogen.y },
+				{ v0homogen.x, v1homogen.z, v2homogen.z },
+			};
+
+			// Calculate constant function to interpolate w
+			vec3 C = M * vec3(1, 1, 1);
 
 			for (int y = image_height - 1; y >= 0; y--) {
 				for (int x = 0; x < image_width; x++) {
 
 					vec3 sample = { x + 0.5f, y + 0.5f, 1.0f };
+					float w = dot(C, sample);
 
-					if (in_triangle(sample, v0homogen, v1homogen, v2homogen))
-						// write_color(cout, triangle_color);
+					if (in_triangle(sample, v0homogen/v0homogen.w, v1homogen/v1homogen.w, v2homogen/v2homogen.w) && w <= depth[y][x])
+					{
+						depth[y][x] = w;
 						image[y][x] = colors[indices[3 * idx] % 6];
-					// else
-					// 	// write_color(cout, background_color);
-					// 	image[y][x] = background_color;
+					}
 				}
 			}
 		}
