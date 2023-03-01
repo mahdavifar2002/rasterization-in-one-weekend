@@ -24,4 +24,4 @@ void write_color(std::ostream &out, vec3 pixel_color) {
 		<< static_cast<int>(256 * clamp(b, 0.0f, 0.999f)) << '\n';
 }
 
-#endif // COLOR_H
+#endif
